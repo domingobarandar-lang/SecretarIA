@@ -1,0 +1,21 @@
+# Credenciales — nunca a git
+.env
+.env.*
+!.env.example
+
+# Configuración del cliente: se versiona el ejemplo, nunca el archivo real
+device.config.json
+
+# Memoria local del agente
+datos/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage

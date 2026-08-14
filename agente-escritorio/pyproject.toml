@@ -1,0 +1,7 @@
+# Solo configuración de pytest: el proyecto no se instala como paquete,
+# se corre desde su carpeta (así vive dentro de la placa).
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
