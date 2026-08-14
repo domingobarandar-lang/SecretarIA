@@ -9,6 +9,23 @@ OAuth del ejecutivo nunca salen del dispositivo.
 Este módulo es el cerebro y nada más: entra texto por el terminal, sale texto.
 Micrófono, parlante, pantalla y botón de mute son otro módulo, otra sesión.
 
+## Dónde vive esto — se lee raro y es a propósito
+
+La carpeta está **físicamente dentro** de `fabrica__agentes/`, pero **ese repo no la
+versiona**: su `.gitignore` excluye `SecretarIA/` entera. Lo que versiona este
+código es el **git propio** que vive en `SecretarIA/` (un nivel más arriba). Los
+commits van ahí.
+
+Es para poder sacarla después con un `mv` sin que el historial de la fábrica
+registre jamás que estuvo. De ahí las dos cosas que **no** hay que hacer: no
+commitear nada de acá al repo de la fábrica, y no quitar la línea `SecretarIA/`
+de su `.gitignore` sin mover la carpeta primero.
+
+Las guardas de `docs/DECISIONES.md` que apuntan a `SecretarIA/agente-escritorio/…`
+se resuelven contra el **disco**, no contra git: hoy pasan, y el día de la mudanza
+van a fallar solas pidiendo que se actualicen las rutas. Esa alarma es
+intencional — no apagarla por adelantado.
+
 ## Stack — cerrado, no se discute
 
 | Pieza | Decisión |
