@@ -29,16 +29,19 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Iterable, Sequence
 
-from agent import prompts, tools
+from agent import llm, prompts, tools
 from agent.config import ACCIONES_IRREVERSIBLES, DIAS_SEMANA, Config
 from agent.memory import Memoria
 from agent.tools import ErrorDeHerramienta, Evento, FuenteDatos, FuenteMock
 
 log = logging.getLogger("secretaria")
 
-#: Modelo por defecto. Se puede tapar con la variable de entorno `MODELO`, que
-#: es la palanca para cambiarlo sin tocar código ni redesplegar.
-MODELO_POR_DEFECTO = "claude-sonnet-4-20250514"
+#: El modelo lo pone el proveedor (ver `agent/llm.py`) y `MODELO` en el entorno lo
+#: tapa. Este valor solo se alcanza con un cliente inyectado —los tests— porque en
+#: una corrida real `llm.crear_cliente()` ya habría fallado sin `LLM_PROVIDER`.
+#: Es inválido a propósito: si alguna vez llegara a una API de verdad, revienta en
+#: vez de facturar contra un modelo que nadie eligió.
+MODELO_SIN_RESOLVER = "sin-modelo-declarado"
 
 #: `agente.largo_respuesta` no puede quedarse solo en el prompt: si el modelo lo
 #: ignora, el techo de tokens lo hace cumplir igual. Es el mismo ajuste dicho dos
@@ -152,9 +155,14 @@ class Agente:
         self.memoria = memoria
         self.fuente = fuente or FuenteMock(zona=config.zona())
         self.confirmar = confirmar or denegar_siempre
-        self.modelo = modelo or os.environ.get("MODELO") or MODELO_POR_DEFECTO
         self._ahora = ahora or (lambda: datetime.now(config.zona()))
-        self._cliente = cliente if cliente is not None else _cliente_por_defecto()
+        self._cliente = cliente if cliente is not None else llm.crear_cliente()
+        self.modelo = (
+            modelo
+            or os.environ.get("MODELO")
+            or getattr(self._cliente, "modelo_por_defecto", None)
+            or MODELO_SIN_RESOLVER
+        )
         self._mensajes: list[dict[str, Any]] = []
         self.tokens_sesion = 0
 
@@ -372,12 +380,6 @@ class Agente:
 # --------------------------------------------------------------------------
 # Utilidades
 # --------------------------------------------------------------------------
-
-
-def _cliente_por_defecto() -> Any:
-    import anthropic  # import tardío: los tests nunca construyen un cliente real
-
-    return anthropic.Anthropic()
 
 
 def _resultado(bloque: dict[str, Any], texto: str, *, error: bool) -> dict[str, Any]:

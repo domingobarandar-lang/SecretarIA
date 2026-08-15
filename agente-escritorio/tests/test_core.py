@@ -529,10 +529,25 @@ def test_el_modelo_se_puede_tapar_por_entorno(config, memoria, fuente, monkeypat
     assert agente.modelo == "modelo-de-prueba"
 
 
-def test_sin_variable_de_entorno_manda_el_default(config, memoria, fuente, monkeypatch):
+def test_sin_variable_de_entorno_el_modelo_lo_pone_el_cliente(
+    config, memoria, fuente, monkeypatch
+):
+    """El default del modelo es del proveedor, no del core."""
+    monkeypatch.delenv("MODELO", raising=False)
+    cliente = ClienteFalso([respuesta([texto("ok")])])
+    cliente.modelo_por_defecto = "gemini-3.1-pro-preview"
+    agente = Agente(config, memoria, cliente=cliente, fuente=fuente, ahora=lambda: AHORA)
+    assert agente.modelo == "gemini-3.1-pro-preview"
+
+
+def test_un_cliente_sin_modelo_declarado_no_inventa_uno(
+    config, memoria, fuente, monkeypatch
+):
+    """El respaldo es inválido a propósito: reventar es más barato que facturar."""
     monkeypatch.delenv("MODELO", raising=False)
     agente = armar(config, memoria, fuente, [respuesta([texto("ok")])])
-    assert agente.modelo == core.MODELO_POR_DEFECTO
+    assert agente.modelo == core.MODELO_SIN_RESOLVER
+    assert agente.modelo not in ("claude-sonnet-4-20250514", "gemini-3.1-pro-preview")
 
 
 def test_los_bloques_reales_del_sdk_se_normalizan_a_diccionarios(config, memoria, fuente):

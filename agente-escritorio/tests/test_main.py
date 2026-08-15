@@ -65,11 +65,25 @@ def test_la_solicitud_se_le_muestra_a_la_persona_antes_de_preguntar(monkeypatch,
 # -- arranque --------------------------------------------------------------
 
 
-def test_sin_api_key_no_arranca(monkeypatch, capsys):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_sin_proveedor_declarado_no_arranca(monkeypatch, capsys):
+    """Sin `LLM_PROVIDER` no se elige uno: se para. Adivinar acá cuesta plata."""
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "hay-key-igual")
     monkeypatch.setattr(main, "_cargar_env", lambda: None)
     assert main.main([str(RAIZ / "device.config.example.json")]) == 2
-    assert "ANTHROPIC_API_KEY" in capsys.readouterr().err
+    assert "LLM_PROVIDER" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "proveedor,variable",
+    [("gemini", "GEMINI_API_KEY"), ("anthropic", "ANTHROPIC_API_KEY")],
+)
+def test_sin_la_key_del_proveedor_no_arranca(monkeypatch, capsys, proveedor, variable):
+    monkeypatch.setenv("LLM_PROVIDER", proveedor)
+    monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setattr(main, "_cargar_env", lambda: None)
+    assert main.main([str(RAIZ / "device.config.example.json")]) == 2
+    assert variable in capsys.readouterr().err
 
 
 def test_con_config_invalida_no_arranca(monkeypatch, capsys, tmp_path):
@@ -78,6 +92,30 @@ def test_con_config_invalida_no_arranca(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(main, "_cargar_env", lambda: None)
     assert main.main([str(ruta)]) == 2
     assert "Configuración inválida" in capsys.readouterr().err
+
+
+# -- de dónde salen los datos ----------------------------------------------
+
+
+def test_por_defecto_los_datos_son_de_mentira_y_lo_dice(config):
+    fuente, etiqueta = main._armar_fuente(config)
+    assert fuente is None  # el core arma su FuenteMock
+    assert "mock" in etiqueta and "no es su agenda real" in etiqueta
+
+
+def test_una_fuente_inventada_no_arranca(config, monkeypatch):
+    monkeypatch.setenv("FUENTE_DATOS", "supabase")
+    with pytest.raises(main.ErrorDeGoogle) as info:
+        main._armar_fuente(config)
+    assert "mock, google" in str(info.value)
+
+
+def test_pedir_google_sin_credenciales_falla_al_arrancar(config, monkeypatch):
+    """Nunca a mitad de conversación: ahí ya hay alguien esperando una respuesta."""
+    monkeypatch.setenv("FUENTE_DATOS", "google")
+    with pytest.raises(main.ErrorDeGoogle) as info:
+        main._armar_fuente(config)
+    assert "GOOGLE_OAUTH" in str(info.value)
 
 
 # -- guardia de sintaxis ---------------------------------------------------

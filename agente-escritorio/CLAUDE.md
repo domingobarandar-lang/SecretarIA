@@ -31,12 +31,29 @@ intencional — no apagarla por adelantado.
 | Pieza | Decisión |
 |---|---|
 | Lenguaje | Python 3.11+ (la Pi 5 con Bookworm trae 3.11: no usar sintaxis 3.12+) |
-| SDK | `anthropic` oficial |
-| Modelo | `claude-sonnet-4-20250514` |
+| Modelo | `gemini-3.1-pro-preview` vía `google-genai` (Interactions API) |
+| Proveedor | `LLM_PROVIDER` = `gemini` \| `anthropic`. **Sin default: no arranca sin la variable** |
 | Memoria | SQLite local. No Supabase, no Redis, no Postgres |
-| Google | MCP externo `taylorwilsdon/google_workspace_mcp` |
+| Google | MCP **oficiales** de Google: `calendarmcp` y `gmailmcp`. Drive no |
 | Config | `device.config.json` — define TODO el comportamiento por cliente |
 | Framework | **ninguno**. Loop propio. Nada de LangChain, CrewAI, LlamaIndex |
+
+**El proveedor se cambió el 2026-08-14** (decisión de José). Anthropic quedó como
+segunda opción viva, no como resto arqueológico: `agent/llm.py` traduce y los dos
+caminos están probados. Dos cosas que hay que saber de Gemini 3.1 Pro:
+
+- **No tiene free tier.** US$ 2 por millón de tokens de entrada, US$ 12 de salida.
+  Las keys gratis del pool de la fábrica **no sirven** para este modelo.
+- **Firma su razonamiento.** Los pasos `thought` tienen que volver junto al
+  `function_call` que justifican. Si se pierden, el agente no falla: repite
+  llamadas y gasta el doble, sin error y sin aviso. El round-trip lo hace
+  `agent/llm.py` y hay un test que lo vigila.
+
+El formato interno del core **sigue siendo el de bloques** (`tool_use` /
+`tool_result`), que es el de Anthropic. No se cambió al pasar a Gemini y eso fue
+deliberado: es el contrato contra el que están escritas las garantías y sus
+pruebas. Traducir en el borde cuesta un archivo; cambiar el idioma interno costaba
+el core entero.
 
 ## Prohibido
 
@@ -44,8 +61,10 @@ intencional — no apagarla por adelantado.
 - Enviar correo. Solo borradores — **a propósito**, no es un pendiente.
 - Audio, wake word, TTS, STT, pantalla.
 - Servidor web, FastAPI, endpoints. Es un REPL de terminal.
-- Inventar firmas del SDK de `anthropic`. Si hay duda, se pregunta y se verifica.
+- Inventar firmas de un SDK. Si hay duda, se lee el SDK instalado y se verifica.
 - System prompts con el nombre de un cliente adentro: se construyen desde la config.
+- **Usar el tool `mcp_server` de la API de Gemini.** Ver abajo: es el atajo que
+  parece obvio y abre el único agujero que este producto no puede tener.
 
 ## Las cinco tools
 
@@ -56,6 +75,31 @@ intencional — no apagarla por adelantado.
 | `buscar_correos(query, max_resultados)` | Busca en Gmail: remitente, asunto, fecha, extracto | lectura |
 | `redactar_borrador(destinatario, asunto, cuerpo)` | Crea un DRAFT. **Nunca envía** | escritura reversible |
 | `recordar(hecho, categoria)` | Guarda una preferencia del ejecutivo | escritura local |
+
+### El modelo no habla MCP, y esa es la línea que no se cruza
+
+La API de Gemini trae un tipo de tool `mcp_server`: se le pasa la URL y el modelo
+llama al servidor solo. Es cómodo, es oficial, y acá está **prohibido**.
+
+El MCP de Calendar publica ocho herramientas, entre ellas `delete_event`. Dárselo
+al modelo significaría que el agente puede borrar reuniones del ejecutivo: por
+fuera de las cinco tools, por fuera de la confirmación humana y por fuera de la
+tabla `acciones`. Las tres garantías salteadas de una vez, y ninguna prueba
+funcional lo notaría — el agente respondería perfecto hasta el día que borre algo.
+
+El MCP vive detrás de `FuenteDatos`, llamado por nuestro código. De las diecisiete
+herramientas que publican los dos servidores se usan **cuatro**: `list_events`,
+`create_event`, `search_threads`, `create_draft`. La lista `_METODOS_PERMITIDOS`
+de `integrations/google_mcp.py` lo hace estructural: pedir cualquier otra cosa es
+un `AssertionError` antes de tocar la red, no una llamada que sale.
+
+Dos regalos del cambio, que ya no dependen de nuestra disciplina:
+
+- **El MCP de Gmail no publica ninguna herramienta de envío.** «Solo borradores»
+  lo garantiza ahora también el transporte.
+- **Crear eventos exige agregar `calendar.events` a la pantalla de consentimiento**
+  a mano: los scopes documentados por defecto son de solo lectura. La frontera
+  leer/escribir quedó también en el OAuth.
 
 `crear_evento` tiene dos obligaciones que no dependen del prompt:
 1. **Verifica conflictos llamando a `ver_agenda` antes.** Por eso el validador
@@ -123,8 +167,9 @@ agente-escritorio/
 │   ├── memory.py    # SQLite: conversaciones, hechos, acciones
 │   ├── prompts.py   # system prompt construido desde la config
 │   ├── tools.py     # definición y despacho de las cinco tools
+│   ├── llm.py       # adapter Gemini/Anthropic. El core habla un solo idioma
 │   └── core.py      # loop agéntico + confirmación humana
-├── integrations/google_mcp.py  # cliente del MCP de Google Workspace
+├── integrations/google_mcp.py  # los MCP de Google detrás de FuenteDatos
 └── tests/
 ```
 
@@ -142,11 +187,29 @@ python -m venv .venv
 - **Tarea 1 — lista**: estructura, `config.py` con validación, `memory.py` con las
   tres tablas.
 - **Tarea 2 — lista**: `prompts.py`, `tools.py` (contrato + fuente mock), `core.py`
-  (loop, ventana, confirmación humana, auditoría) y `main.py` (REPL). **181 tests
-  en verde**, sin tokens y sin salir a internet.
-- **Pendiente**: `integrations/google_mcp.py` — la misma interfaz `FuenteDatos`
-  que implementa `FuenteMock`, contra el MCP de Google. Va al final a propósito:
-  el loop ya está probado, así que un fallo ahí es del MCP y de nada más.
+  (loop, ventana, confirmación humana, auditoría) y `main.py` (REPL).
+- **Tarea 3 — escrita, sin estrenar**: `agent/llm.py` (adapter Gemini/Anthropic) e
+  `integrations/google_mcp.py` (`FuenteDatos` contra los MCP oficiales).
+  **246 tests en verde**, sin tokens y sin salir a internet.
+- **Pendiente y bloqueado en 🔴**: correr el MCP contra los servidores de verdad.
+  Falta (a) inscribirse en el Developer Preview Program de Google Workspace,
+  (b) un proyecto de Google Cloud con las APIs y los MCP habilitados, (c) un
+  cliente OAuth y el refresh token del ejecutivo, y (d) una `GEMINI_API_KEY` de
+  tramo pagado. Todo eso es «crear cuentas / gastar dinero»: lo pide José.
+
+El código del MCP está probado contra dobles, **no contra Google**. Por eso
+`conectar()` hace un `tools/list` y lo cruza con lo que este proyecto espera: si
+un nombre o un parámetro cambió, el agente no arranca y dice cuál. Es la
+diferencia entre enterarse al encender y enterarse cuando alguien pregunta por su
+agenda.
+
+### La otra mitad de los tests
+
+`tests/conftest.py` borra del entorno, antes de cada test, todo lo que podría
+convertir un descuido en una llamada facturada o en un efecto sobre una cuenta
+real: `LLM_PROVIDER`, las API keys, `FUENTE_DATOS` y las credenciales de Google.
+Antes era una convención («ningún test construye un cliente real»); desde que el
+proveedor y la fuente se deciden por entorno, tenía que ser estructural.
 
 El `.venv` de desarrollo corre Python 3.12 y la placa trae 3.11. Un test
 (`test_todo_el_codigo_parsea_como_python_311`) parsea todo el proyecto con

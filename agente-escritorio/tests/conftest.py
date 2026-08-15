@@ -3,6 +3,12 @@
 El cliente falso no es una comodidad: es lo que hace que la suite corra con cero
 tokens y sin salir a internet. Ningún test construye un cliente real, así que no
 existe la forma de que una corrida despistada llame a la API de verdad.
+
+Eso era una convención hasta que el proveedor pasó a decidirse por entorno. Ahora
+`sin_credenciales_en_el_entorno` lo hace **estructural**: borra las variables antes
+de cada test, así que ni un `Agente(...)` sin cliente inyectado ni una key exportada
+en la terminal pueden acabar en una llamada facturada. Es la misma regla que el
+arnés de evals de la línea conversacional: no se confía en que nadie se equivoque.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from agent.config import TOOLS_DISPONIBLES, validar
+from agent.llm import PROVEEDORES
 from agent.memory import Memoria
 from agent.tools import Evento, FuenteMock
 
@@ -22,6 +29,33 @@ ZONA = ZoneInfo("America/Santiago")
 
 #: Un jueves, para que los tests de días bloqueados tengan de dónde agarrarse.
 AHORA = datetime(2026, 8, 20, 9, 0, tzinfo=ZONA)
+
+
+#: Todo lo que podría convertir un descuido en una llamada facturada o en un
+#: efecto sobre la cuenta real de alguien. La parte del LLM se deriva del adapter,
+#: no se escribe a mano: un proveedor nuevo queda cubierto solo.
+#:
+#: `FUENTE_DATOS` es la que más importa y la que menos se nota: con `google` en la
+#: terminal, un test que llame a `main()` saldría a la agenda de verdad.
+_VARIABLES_PELIGROSAS = (
+    "LLM_PROVIDER",
+    "MODELO",
+    "GEMINI_THINKING",
+    "FUENTE_DATOS",
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
+    "GOOGLE_OAUTH_REFRESH_TOKEN",
+    "GOOGLE_MCP_CALENDAR",
+    "GOOGLE_MCP_GMAIL",
+    *(f"{proveedor.upper()}_API_KEY" for proveedor in PROVEEDORES),
+)
+
+
+@pytest.fixture(autouse=True)
+def sin_credenciales_en_el_entorno(monkeypatch):
+    """Ningún test hereda credenciales ni fuentes reales de la terminal de quien corre."""
+    for variable in _VARIABLES_PELIGROSAS:
+        monkeypatch.delenv(variable, raising=False)
 
 
 def datos_config(**cambios: Any) -> dict[str, Any]:

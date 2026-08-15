@@ -14,10 +14,13 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from agent.config import ErrorDeConfig, cargar_config
 from agent.core import Agente, ErrorDelAgente, SolicitudConfirmacion
+from agent.llm import ErrorDeLLM, crear_cliente
 from agent.memory import Memoria
+from integrations.google_mcp import ErrorDeGoogle
 
 SALIDAS = {"salir", "chao", "exit", "quit", ":q"}
 AFIRMATIVAS = {"si", "sí", "s", "ya", "dale", "ok", "confirmo", "yes", "y"}
@@ -60,6 +63,29 @@ def preguntar_por_consola(solicitud: SolicitudConfirmacion) -> bool:
     return respuesta in AFIRMATIVAS
 
 
+def _armar_fuente(config) -> tuple[Any, str]:
+    """De dónde salen la agenda y los correos: `FUENTE_DATOS` = mock | google.
+
+    El default es `mock` y no falla cerrado como `LLM_PROVIDER`, porque el riesgo
+    es distinto: un proveedor equivocado factura en silencio, mientras que la
+    fuente mock **se anuncia sola** — sus eventos empiezan con `[MOCK]` y sus
+    correos son de `ejemplo.invalid`. Una persona lo ve en la primera respuesta.
+    Igual sale en el saludo, para no depender de que lo vea.
+    """
+    eleccion = (os.environ.get("FUENTE_DATOS") or "mock").strip().lower()
+
+    if eleccion == "mock":
+        return None, "mock (datos de ejemplo, no es su agenda real)"
+    if eleccion == "google":
+        from integrations.google_mcp import conectar
+
+        return conectar(config.zona()), "Google Workspace (calendario y correo reales)"
+
+    raise ErrorDeGoogle(
+        f"FUENTE_DATOS=«{eleccion}» no existe. Opciones: mock, google."
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     argumentos = list(argv if argv is not None else sys.argv[1:])
     ruta_config = argumentos[0] if argumentos else None
@@ -73,18 +99,25 @@ def main(argv: list[str] | None = None) -> int:
         print(problema, file=sys.stderr)
         return 2
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print(
-            "Falta ANTHROPIC_API_KEY. Copia .env.example a .env y complétala.",
-            file=sys.stderr,
-        )
+    # El proveedor, su credencial y la conexión a Google se resuelven acá, antes de
+    # abrir la base y de saludar: un arranque que falla tiene que fallar sin haber
+    # dejado nada a medias.
+    try:
+        cliente = crear_cliente()
+        fuente, etiqueta_fuente = _armar_fuente(config)
+    except (ErrorDeLLM, ErrorDeGoogle) as problema:
+        print(problema, file=sys.stderr)
         return 2
 
     memoria = Memoria()
-    agente = Agente(config, memoria, confirmar=preguntar_por_consola)
+    agente = Agente(
+        config, memoria, cliente=cliente, fuente=fuente, confirmar=preguntar_por_consola
+    )
 
+    proveedor = os.environ.get("LLM_PROVIDER", "").strip().lower()
     print(f"{config.agente.nombre} — {config.device_id} · sesión {memoria.session_id[:8]}")
-    print(f"Modelo: {agente.modelo}. Escribe «salir» para terminar.")
+    print(f"Modelo: {agente.modelo} ({proveedor}) · Datos: {etiqueta_fuente}")
+    print("Escribe «salir» para terminar.")
     print()
 
     try:
