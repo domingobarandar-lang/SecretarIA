@@ -140,6 +140,15 @@ python -m venv .venv
 ## Estado
 
 - **Tarea 1 — lista**: estructura, `config.py` con validación, `memory.py` con las
-  tres tablas, tests de ambos en verde.
-- **Tarea 2 — pendiente**: `core.py`, `tools.py` (con datos mock), `prompts.py`, `main.py`.
-- **Después**: conexión real al MCP de Google, con el loop ya probado.
+  tres tablas.
+- **Tarea 2 — lista**: `prompts.py`, `tools.py` (contrato + fuente mock), `core.py`
+  (loop, ventana, confirmación humana, auditoría) y `main.py` (REPL). **181 tests
+  en verde**, sin tokens y sin salir a internet.
+- **Pendiente**: `integrations/google_mcp.py` — la misma interfaz `FuenteDatos`
+  que implementa `FuenteMock`, contra el MCP de Google. Va al final a propósito:
+  el loop ya está probado, así que un fallo ahí es del MCP y de nada más.
+
+El `.venv` de desarrollo corre Python 3.12 y la placa trae 3.11. Un test
+(`test_todo_el_codigo_parsea_como_python_311`) parsea todo el proyecto con
+`ast.parse(feature_version=(3, 11))` para que la sintaxis nueva no se cuele
+hasta la placa.

@@ -78,5 +78,10 @@ una tool: solo se crean borradores.
 
 ## Estado
 
-Tarea 1 lista (config + memoria + tests). Faltan `core.py`, `tools.py`,
-`prompts.py` y `main.py`, y después la conexión real al MCP de Google Workspace.
+El cerebro está completo y corre: configuración, memoria, prompt, las cinco
+tools, el loop agéntico y el REPL. **181 tests en verde**, sin gastar tokens.
+
+Los datos de agenda y correo son **mock** (van marcados `[MOCK]` y usan el
+dominio `ejemplo.invalid`). Lo único que falta es `integrations/google_mcp.py`,
+que implementa la misma interfaz que el mock contra el MCP de Google Workspace —
+cambiar de fuente no toca el loop, el prompt ni las tools.
