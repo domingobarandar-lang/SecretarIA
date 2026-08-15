@@ -79,6 +79,22 @@ _PARAMETROS_QUE_USAMOS: dict[str, tuple[str, ...]] = {
 #: conectado «por si acaso» es superficie de ataque sin caso de uso.
 SERVIDORES = tuple(_METODOS_PERMITIDOS)
 
+#: Los permisos que hay que pedirle al ejecutivo. Viven acá, una sola vez, para
+#: que la pantalla de consentimiento y `scripts/autorizar-google.py` no puedan
+#: desincronizarse: pedir de menos se descubre recién al usar la herramienta.
+#:
+#: `calendar.events` es el que Google **no** lista en su guía de configuración —
+#: los tres de calendario que documenta son de solo lectura— y es justo el que
+#: `create_event` necesita. Sin él, SecretarIA lee la agenda y no puede anotar.
+PERMISOS = (
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+    "https://www.googleapis.com/auth/calendar.events.freebusy",
+    "https://www.googleapis.com/auth/calendar.events.readonly",
+    "https://www.googleapis.com/auth/calendar.events",
+)
+
 
 class ErrorDeGoogle(Exception):
     """No se pudo hablar con Google. El core lo convierte en un error de herramienta."""

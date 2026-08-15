@@ -132,6 +132,7 @@ def test_todo_el_codigo_parsea_como_python_311():
     archivos = [
         *(RAIZ / "agent").glob("*.py"),
         *(RAIZ / "integrations").glob("*.py"),
+        *(RAIZ / "scripts").glob("*.py"),
         *(RAIZ / "tests").glob("*.py"),
         RAIZ / "main.py",
     ]
