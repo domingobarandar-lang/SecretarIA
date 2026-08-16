@@ -12,5 +12,18 @@ httpx>=0.27
 # Base de datos IANA de zonas horarias: Windows no la trae; Linux/Raspberry sí.
 tzdata>=2024.1; platform_system == "Windows"
 
+# Voz — todo local, nada de esto manda audio a ninguna parte. `main.py` (el REPL
+# de texto) arranca igual sin nada de esto instalado: cada módulo de voz/ traduce
+# su propio ImportError a un mensaje con el pip que hay que correr.
+#
+# En la Raspberry: `sudo apt install portaudio19-dev` ANTES de pyaudio, que si no
+# compila contra un portaudio que no está y el error no menciona apt por ningún
+# lado. Si `webrtcvad-wheels` no trae rueda para aarch64, `pip install webrtcvad`
+# compila desde fuente y sirve igual — es el mismo módulo.
+piper-tts>=1.7          # TTS. El modelo .onnx NO viene acá: scripts/descargar_voz.sh
+faster-whisper>=1.2     # STT. Baja su modelo solo, la primera vez, a ~/.cache
+webrtcvad-wheels>=2.0   # detecta cuándo alguien empezó y dejó de hablar
+pyaudio>=0.2.14         # micrófono y parlante
+
 # Desarrollo
 pytest>=8.0

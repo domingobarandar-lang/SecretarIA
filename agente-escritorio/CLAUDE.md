@@ -6,25 +6,23 @@ La placa es el servidor — este repositorio vive descargado en ella y el agente
 corre ahí. **Solo el razonamiento del modelo sale por API.** Las credenciales
 OAuth del ejecutivo nunca salen del dispositivo.
 
-Este módulo es el cerebro y nada más: entra texto por el terminal, sale texto.
-Micrófono, parlante, pantalla y botón de mute son otro módulo, otra sesión.
+Este módulo es el cerebro **y la voz**: entra audio o texto, sale audio o texto.
+Pantalla y botón de mute siguen siendo otro módulo, otra sesión.
 
-## Dónde vive esto — se lee raro y es a propósito
+**El 2026-08-16 la voz entró acá** (decisión de José). Antes estaba prohibida y
+vivía en «otro módulo, otra sesión»; se movió adentro porque el ciclo de voz
+necesita el mismo `Agente.responder()` y separarlos obligaba a inventar un
+protocolo entre dos procesos que corren en la misma placa. Lo que **no** cambió:
+el cerebro no depende de la voz. `main.py` sigue siendo un REPL de texto puro y
+la suite corre entera sin micrófono, sin parlante y sin los 63 MB del modelo.
 
-La carpeta está **físicamente dentro** de `fabrica__agentes/`, pero **ese repo no la
-versiona**: su `.gitignore` excluye `SecretarIA/` entera. Lo que versiona este
-código es el **git propio** que vive en `SecretarIA/` (un nivel más arriba). Los
-commits van ahí.
+## Dónde vive esto
 
-Es para poder sacarla después con un `mv` sin que el historial de la fábrica
-registre jamás que estuvo. De ahí las dos cosas que **no** hay que hacer: no
-commitear nada de acá al repo de la fábrica, y no quitar la línea `SecretarIA/`
-de su `.gitignore` sin mover la carpeta primero.
+Proyecto independiente en `C:\Users\user\Proyectos_chaski\SecretarIA`, hermano de
+`Fabrica__Agentes/`. Lo único que se lee raro: **el git está un nivel más arriba
+de este archivo** — en `SecretarIA/`, no en `agente-escritorio/`. Los commits van
+ahí.
 
-Las guardas de `docs/DECISIONES.md` que apuntan a `SecretarIA/agente-escritorio/…`
-se resuelven contra el **disco**, no contra git: hoy pasan, y el día de la mudanza
-van a fallar solas pidiendo que se actualicen las rutas. Esa alarma es
-intencional — no apagarla por adelantado.
 
 ## Stack — cerrado, no se discute
 
@@ -59,8 +57,12 @@ el core entero.
 
 - Agregar tools fuera de las cinco de abajo.
 - Enviar correo. Solo borradores — **a propósito**, no es un pendiente.
-- Audio, wake word, TTS, STT, pantalla.
-- Servidor web, FastAPI, endpoints. Es un REPL de terminal.
+- Pantalla y botón físico de mute. La voz sí — ver «El ciclo de voz» abajo.
+- Que el core importe algo de `voz/`. La dependencia va en un solo sentido:
+  la voz usa al agente, el agente no sabe que la voz existe.
+- Mandar audio del ejecutivo a una API. El wake word y el STT corren **locales**.
+  Lo único que sale por red es el razonamiento del modelo, igual que siempre.
+- Servidor web, FastAPI, endpoints. Se opera por terminal o por voz, no por HTTP.
 - Inventar firmas de un SDK. Si hay duda, se lee el SDK instalado y se verifica.
 - System prompts con el nombre de un cliente adentro: se construyen desde la config.
 - **Usar el tool `mcp_server` de la API de Gemini.** Ver abajo: es el atajo que
@@ -162,6 +164,7 @@ agente-escritorio/
 ├── device.config.json          # el cliente (gitignored)
 ├── device.config.example.json  # la plantilla (versionada)
 ├── main.py                     # REPL de texto
+├── main_voz.py                 # REPL de voz. Mismo agente, otra puerta
 ├── agent/
 │   ├── config.py    # esquema + validación + objeto de solo lectura
 │   ├── memory.py    # SQLite: conversaciones, hechos, acciones
@@ -169,6 +172,13 @@ agente-escritorio/
 │   ├── tools.py     # definición y despacho de las cinco tools
 │   ├── llm.py       # adapter Gemini/Anthropic. El core habla un solo idioma
 │   └── core.py      # loop agéntico + confirmación humana
+├── voz/
+│   ├── audio.py     # PyAudio. La única capa que sabe qué es un frames_per_buffer
+│   ├── escucha.py   # webrtcvad: cuándo empezó y cuándo terminó de hablar alguien
+│   ├── stt.py       # faster-whisper local
+│   ├── tts.py       # Piper local
+│   └── despertar.py # ¿le hablaron al agente? Busca su nombre en lo transcrito
+├── models/                     # las voces .onnx (gitignored, ~63 MB c/u)
 ├── integrations/google_mcp.py  # los MCP de Google detrás de FuenteDatos
 └── tests/
 ```
@@ -179,8 +189,38 @@ agente-escritorio/
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pytest      # tests
-.\.venv\Scripts\python.exe main.py        # REPL
+.\.venv\Scripts\python.exe main.py        # REPL de texto
+
+# Voz: una vez por caja nueva
+./scripts/descargar_voz.sh                              # baja el modelo a models/
+.\.venv\Scripts\python.exe scripts\verificar_audio.py   # ¿capta el micrófono?
+.\.venv\Scripts\python.exe main_voz.py --probar-voz     # ¿suena el parlante?
+.\.venv\Scripts\python.exe main_voz.py                  # el ciclo completo
 ```
+
+## El ciclo de voz
+
+Cuatro piezas, todas locales: **webrtcvad** decide cuándo alguien habló,
+**Whisper** lo transcribe, el agente de siempre responde y **Piper** lo dice.
+Nada de eso sale por red — lo único que sale sigue siendo el razonamiento del
+modelo. No es una postura: el micrófono está siempre encendido, así que lo que
+saldría no serían las órdenes, sería la oficina entera.
+
+**El wake word no es un modelo, es el nombre de la config.** Lo estándar sería
+openWakeWord o Porcupine, que gastan muchísima menos CPU. Pero esos modelos se
+entrenan por palabra: existe uno para «alexa», no para «Vera». Y el nombre sale
+de `device.config.json`, la pieza que promete que cambiar de cliente no cuesta
+código — un modelo por nombre sería entrenar uno antes de vender cada caja. Así
+que Whisper transcribe todo y `voz/despertar.py` busca el nombre, con
+comparación difusa porque Whisper escribe «Bera» y «Vela» la mitad de las veces.
+Se paga en CPU. Si la placa no da abasto, **ahí** es donde se cambia la
+estrategia: el resto del ciclo no sabe cómo se tomó esa decisión.
+
+La confirmación de `crear_evento` por voz sigue la misma regla que por terminal,
+y acá pesa más: **lo que no es un sí claro es un no.** Silencio es no,
+transcripción vacía es no. Whisper se equivoca, y el error no es simétrico — no
+crear un evento se arregla repitiendo la frase; crear uno que nadie pidió ya le
+salió por correo a otras personas.
 
 ## Estado
 
@@ -190,7 +230,12 @@ python -m venv .venv
   (loop, ventana, confirmación humana, auditoría) y `main.py` (REPL).
 - **Tarea 3 — escrita, sin estrenar**: `agent/llm.py` (adapter Gemini/Anthropic) e
   `integrations/google_mcp.py` (`FuenteDatos` contra los MCP oficiales).
-  **246 tests en verde**, sin tokens y sin salir a internet.
+- **Voz — escrita, probada a medias (2026-08-16)**: `voz/` completo, `main_voz.py`
+  y el bloque `voz` del esquema. **295 tests en verde**, sin micrófono y sin
+  cargar un modelo. Piper sí está estrenado de verdad: sintetiza a 0.62× tiempo
+  real en el PC de desarrollo. Lo que **falta probar con una persona** es el
+  ciclo entero — despertar por el nombre, transcribir bien un acento chileno y
+  confirmar un `crear_evento` hablando. Eso no lo prueba pytest.
 - **Pendiente y bloqueado en 🔴**: correr el MCP contra los servidores de verdad.
   Falta (a) inscribirse en el Developer Preview Program de Google Workspace,
   (b) un proyecto de Google Cloud con las APIs y los MCP habilitados, (c) un

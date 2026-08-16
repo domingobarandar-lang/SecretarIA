@@ -30,6 +30,16 @@
       "contenido de correos marcados como privados"
     ]
   },
+  "voz": {
+    "habilitada": false,
+    "modelo": "es_MX-claude-high",
+    "dispositivo_entrada": null,
+    "dispositivo_salida": null,
+    "velocidad": 100,
+    "modelo_stt": "small",
+    "silencio_fin_turno_ms": 900,
+    "max_segundos_escucha": 20
+  },
   "limites": {
     "max_iteraciones_loop": 8,
     "max_mensajes_historial": 12,

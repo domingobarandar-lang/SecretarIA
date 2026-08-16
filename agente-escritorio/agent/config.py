@@ -44,6 +44,11 @@ _RE_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s.]+$")
 _RE_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _RE_IDIOMA = re.compile(r"^[a-z]{2}(-[A-Za-z]{2})?$")
 _RE_FECHA_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+#: Nombre de una voz de Piper: <locale>-<hablante>-<calidad>. De ahí se deriva la
+#: ruta del archivo en models/, así que un nombre torcido acá es un modelo que no
+#: se encuentra al arrancar. La misma regla vive en `scripts/descargar_voz.sh`,
+#: que es quien lo baja: las dos salen de la convención de Piper, no una de otra.
+_RE_VOZ_PIPER = re.compile(r"^[a-z]{2,3}_[A-Z]{2}-[A-Za-z0-9_]+-(x_low|low|medium|high)$")
 
 DIAS_SEMANA = (
     "lunes",
@@ -226,6 +231,63 @@ ESQUEMA: dict[str, dict[str, Any]] = {
                 "unicos": True,
             },
             "nunca_revelar": {"tipo": "lista_texto", "default": ()},
+        },
+    },
+    "voz": {
+        "tipo": "bloque",
+        "campos": {
+            # Apagada por defecto: `main.py` es un REPL de texto y tiene que
+            # arrancar en una caja sin micrófono, sin parlante y sin los 63 MB
+            # del modelo. La voz se enciende a propósito, no por omisión.
+            "habilitada": {"tipo": "booleano", "default": False},
+            "modelo": {
+                "tipo": "texto",
+                "default": "es_MX-claude-high",
+                "patron": _RE_VOZ_PIPER,
+                "ejemplo": "es_MX-claude-high",
+            },
+            # `null` = el dispositivo por defecto de Windows/ALSA. Los índices
+            # los imprime `scripts/verificar_audio.py`, y solo hacen falta cuando
+            # la caja tiene más de un micrófono conectado.
+            "dispositivo_entrada": {
+                "tipo": "entero",
+                "default": None,
+                "nulo_permitido": True,
+                "min": 0,
+                "max": 255,
+            },
+            "dispositivo_salida": {
+                "tipo": "entero",
+                "default": None,
+                "nulo_permitido": True,
+                "min": 0,
+                "max": 255,
+            },
+            # Porcentaje, no el `length_scale` de Piper: 100 es la velocidad
+            # natural de la voz y 130 es «30% más rápido». El esquema no tiene
+            # tipo decimal y agregarlo por un solo campo costaba más que la
+            # conversión; además un operador lee mejor «120» que «0.83».
+            # La inversión vive en voz/tts.py, que es quien habla con Piper.
+            "velocidad": {"tipo": "entero", "default": 100, "min": 50, "max": 200},
+            "modelo_stt": {
+                "tipo": "texto",
+                "default": "small",
+                "opciones": ("tiny", "base", "small", "medium"),
+            },
+            # Cuánto silencio cierra el turno. Muy corto corta al ejecutivo a
+            # mitad de frase; muy largo hace que el agente parezca dormido.
+            "silencio_fin_turno_ms": {
+                "tipo": "entero",
+                "default": 900,
+                "min": 300,
+                "max": 5000,
+            },
+            "max_segundos_escucha": {
+                "tipo": "entero",
+                "default": 20,
+                "min": 3,
+                "max": 120,
+            },
         },
     },
     "limites": {

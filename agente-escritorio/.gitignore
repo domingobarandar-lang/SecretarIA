@@ -6,6 +6,14 @@
 # Configuración del cliente: se versiona el ejemplo, nunca el archivo real
 device.config.json
 
+# Modelos de voz: pesan sobre 60 MB cada uno. No se versionan — se aprovisionan
+# en cada caja nueva con scripts/descargar_voz.sh
+models/*.onnx
+models/*.onnx.json
+
+# Audio de prueba: se regenera con una línea, no se versiona
+*.wav
+
 # Memoria local del agente
 datos/
 *.db

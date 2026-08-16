@@ -134,7 +134,9 @@ def test_todo_el_codigo_parsea_como_python_311():
         *(RAIZ / "integrations").glob("*.py"),
         *(RAIZ / "scripts").glob("*.py"),
         *(RAIZ / "tests").glob("*.py"),
+        *(RAIZ / "voz").glob("*.py"),
         RAIZ / "main.py",
+        RAIZ / "main_voz.py",
     ]
     assert len(archivos) >= 8, "el guardia no está mirando los archivos del proyecto"
 
