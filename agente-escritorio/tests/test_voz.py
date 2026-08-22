@@ -19,7 +19,7 @@ from voz import ErrorDeVoz
 from voz.audio import MS_TRAMA, MUESTRAS_TRAMA
 from voz.despertar import buscar_nombre, normalizar
 from voz.escucha import Escucha
-from voz.stt import _idioma_corto
+from voz.stt import _idioma_corto, _origen_modelo
 from voz.tts import Locutor, _limpiar
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -293,3 +293,18 @@ def test_un_modelo_que_no_esta_dice_como_bajarlo(tmp_path, monkeypatch):
 )
 def test_el_idioma_de_whisper_sale_del_de_la_config(etiqueta, corto):
     assert _idioma_corto(etiqueta) == corto
+
+
+def test_si_el_modelo_esta_en_disco_se_usa_esa_carpeta_sin_tocar_red(tmp_path, monkeypatch):
+    """Instalación sin internet (pendrive): el modelo ya está en `models/whisper-<size>/`."""
+    monkeypatch.setattr("voz.stt.CARPETA_MODELOS", tmp_path)
+    (tmp_path / "whisper-small").mkdir()
+
+    assert _origen_modelo("small") == str(tmp_path / "whisper-small")
+
+
+def test_si_el_modelo_no_esta_en_disco_se_pide_por_nombre(tmp_path, monkeypatch):
+    """Instalación normal: sin la carpeta local, `faster-whisper` lo baja solo."""
+    monkeypatch.setattr("voz.stt.CARPETA_MODELOS", tmp_path)
+
+    assert _origen_modelo("small") == "small"

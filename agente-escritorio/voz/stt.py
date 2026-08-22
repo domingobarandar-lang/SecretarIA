@@ -15,14 +15,33 @@ la de producción no tienen por qué usar el mismo.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from voz import ErrorDeVoz
 
 log = logging.getLogger(__name__)
 
+RAIZ = Path(__file__).resolve().parent.parent
+CARPETA_MODELOS = RAIZ / "models"
+
 #: Whisper habla ISO-639-1 de dos letras; la config trae etiquetas tipo `es-CL`.
 def _idioma_corto(etiqueta: str) -> str:
     return (etiqueta or "es").split("-")[0].lower()
+
+
+def _origen_modelo(tamano: str) -> str:
+    """Qué le pasamos a `WhisperModel`: una carpeta local si ya está en
+    `models/whisper-<tamano>/`, o el nombre corto de siempre.
+
+    `faster-whisper` no toca la red si lo que recibe es un directorio que ya
+    existe — resuelve el modelo de ahí directo. Si no existe, le pasamos el
+    nombre y es él quien lo baja de HuggingFace y lo cachea, como siempre.
+    Esto es lo que permite instalar en una caja sin internet (por pendrive,
+    por ejemplo): basta con dejar la carpeta ya armada en `models/` antes de
+    la primera corrida. Se arma con `scripts/descargar_whisper.sh`.
+    """
+    carpeta = CARPETA_MODELOS / f"whisper-{tamano}"
+    return str(carpeta) if carpeta.is_dir() else tamano
 
 
 class Transcriptor:
@@ -45,11 +64,16 @@ class Transcriptor:
                 "  .venv\\Scripts\\python.exe -m pip install faster-whisper"
             ) from falta
 
-        # La primera carga baja el modelo de HuggingFace (~500 MB para `small`) y
-        # lo deja cacheado. Se avisa porque si no, el primer arranque parece
-        # colgado durante varios minutos y la reacción natural es matarlo.
-        log.info("cargando Whisper «%s» (la primera vez lo descarga)", self._tamano)
-        self._modelo = WhisperModel(self._tamano, device="cpu", compute_type="int8")
+        # Si no está pre-cargado en models/, la primera carga baja el modelo de
+        # HuggingFace (~500 MB para `small`) y lo deja cacheado. Se avisa porque
+        # si no, el primer arranque parece colgado varios minutos y la reacción
+        # natural es matarlo.
+        origen = _origen_modelo(self._tamano)
+        if origen == self._tamano:
+            log.info("cargando Whisper «%s» (la primera vez lo descarga)", self._tamano)
+        else:
+            log.info("cargando Whisper «%s» desde %s (sin red)", self._tamano, origen)
+        self._modelo = WhisperModel(origen, device="cpu", compute_type="int8")
         return self._modelo
 
     def precargar(self) -> None:

@@ -1,8 +1,10 @@
 # SecretarIA — agente de escritorio
 
 Asistente ejecutivo personal que corre en una caja sobre el escritorio. Este
-módulo es el cerebro: opera sobre el **calendario** y el **correo** del ejecutivo
-desde un REPL de terminal. Sin voz, sin pantalla, sin servidor web.
+módulo es el cerebro **y la voz**: opera sobre el **calendario** y el
+**correo** del ejecutivo, por terminal (`main.py`) o hablando (`main_voz.py`,
+ver «El ciclo de voz» en [CLAUDE.md](CLAUDE.md)). Sin pantalla, sin botón
+físico, sin servidor web.
 
 Razona con **Gemini 3.1 Pro** y lee los datos por los **MCP oficiales de Google**.
 
@@ -51,6 +53,33 @@ alguien lo note.
 
 No gastan tokens, no salen a internet y no tocan ninguna cuenta: `config.py` lee
 archivos y `memory.py` usa una SQLite en memoria.
+
+## Instalar sin internet (pendrive)
+
+Para un PC de prueba que no tiene internet confiable: `scripts/instalar_pendrive.ps1`
+instala todo desde una copia local — wheels de Windows, la voz de Piper y el
+modelo de Whisper — sin tocar la red. Se arma la copia (en otra máquina, con
+internet) con:
+
+```bash
+pip download --dest wheels --platform win_amd64 --python-version 311 \
+  --implementation cp --abi cp311 --only-binary=:all: -r requirements.txt
+./scripts/descargar_voz.sh
+./scripts/descargar_whisper.sh
+```
+
+Eso deja `wheels/` y `models/` listos para copiar al pendrive junto con el
+resto del proyecto. En el PC de destino, con Python 3.11+ ya instalado:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\instalar_pendrive.ps1
+```
+
+Crea `.venv`, instala todo desde `wheels/` (nunca desde PyPI), arma
+`device.config.json`/`.env` desde las plantillas si no existen, y deja la voz
+encendida. Detalle de por qué esto funciona sin red: `voz/stt.py` carga Whisper
+desde `models/whisper-<tamaño>/` si esa carpeta existe, en vez de pedírselo a
+HuggingFace.
 
 ## Configuración
 

@@ -178,7 +178,7 @@ agente-escritorio/
 │   ├── stt.py       # faster-whisper local
 │   ├── tts.py       # Piper local
 │   └── despertar.py # ¿le hablaron al agente? Busca su nombre en lo transcrito
-├── models/                     # las voces .onnx (gitignored, ~63 MB c/u)
+├── models/                     # voces .onnx y whisper-<tamaño>/ (gitignored)
 ├── integrations/google_mcp.py  # los MCP de Google detrás de FuenteDatos
 └── tests/
 ```
@@ -192,11 +192,20 @@ python -m venv .venv
 .\.venv\Scripts\python.exe main.py        # REPL de texto
 
 # Voz: una vez por caja nueva
-./scripts/descargar_voz.sh                              # baja el modelo a models/
+./scripts/descargar_voz.sh                              # baja la voz a models/
+./scripts/descargar_whisper.sh                           # baja el STT a models/
 .\.venv\Scripts\python.exe scripts\verificar_audio.py   # ¿capta el micrófono?
 .\.venv\Scripts\python.exe main_voz.py --probar-voz     # ¿suena el parlante?
 .\.venv\Scripts\python.exe main_voz.py                  # el ciclo completo
 ```
+
+**PC sin internet confiable** (por ejemplo, instalar desde un pendrive):
+`scripts/instalar_pendrive.ps1` arma `.venv` desde `wheels/` local (nunca
+PyPI) y deja `device.config.json`/`.env` listos, siempre que `wheels/` y
+`models/` ya vengan poblados desde una máquina con internet — ver la sección
+«Instalar sin internet» del README. `voz/stt.py` (`_origen_modelo`) carga
+Whisper desde `models/whisper-<tamaño>/` si existe, sin pedirle nada a
+HuggingFace.
 
 ## El ciclo de voz
 
@@ -236,6 +245,14 @@ salió por correo a otras personas.
   real en el PC de desarrollo. Lo que **falta probar con una persona** es el
   ciclo entero — despertar por el nombre, transcribir bien un acento chileno y
   confirmar un `crear_evento` hablando. Eso no lo prueba pytest.
+- **Instalación sin internet (2026-08-22)**: `scripts/instalar_pendrive.ps1` +
+  `scripts/descargar_whisper.sh` + el cambio en `voz/stt.py` para cargar
+  Whisper desde disco (`_origen_modelo`). Objetivo: probar el ciclo de voz en
+  un PC Windows sin depender de internet en ese momento — copiar `wheels/` y
+  `models/` ya armados y correr el instalador ahí. El script de PowerShell
+  **no se probó en Windows real** (este entorno no tiene uno a mano): se
+  revisó a mano línea por línea, pero la primera corrida real puede encontrar
+  algo que no se vio acá.
 - **Pendiente y bloqueado en 🔴**: correr el MCP contra los servidores de verdad.
   Falta (a) inscribirse en el Developer Preview Program de Google Workspace,
   (b) un proyecto de Google Cloud con las APIs y los MCP habilitados, (c) un
